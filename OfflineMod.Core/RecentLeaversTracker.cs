@@ -43,6 +43,11 @@ internal sealed class RecentLeaversTracker : IClientListener
         if (client.IsFakeClient || client.IsHltv)
             return;
 
+        // Skip server-lifecycle disconnects (map change / server shutdown / loop cycle) — those
+        // drop everyone at once and aren't real "this player left" events worth punishing.
+        if (IsServerLifecycle(reason))
+            return;
+
         var steamId = (ulong) client.SteamId;
         if (steamId == 0)
             return;
@@ -74,4 +79,19 @@ internal sealed class RecentLeaversTracker : IClientListener
             return _leavers.ToList();
         }
     }
+
+    /// <summary>Server-initiated mass disconnects (map change / shutdown / loop cycle) — not real player leaves.</summary>
+    private static bool IsServerLifecycle(NetworkDisconnectionReason reason) => reason switch
+    {
+        NetworkDisconnectionReason.Shutdown
+            or NetworkDisconnectionReason.LoopShutdown
+            or NetworkDisconnectionReason.LoopDeactivate
+            or NetworkDisconnectionReason.LoopLevelLoadActivate
+            or NetworkDisconnectionReason.HostEndGame
+            or NetworkDisconnectionReason.Exiting
+            or NetworkDisconnectionReason.RequestHostStateIdle
+            or NetworkDisconnectionReason.RequestHostStateHltvRelay
+            or NetworkDisconnectionReason.ServerShutdown => true,
+        _ => false,
+    };
 }
